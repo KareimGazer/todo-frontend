@@ -1,0 +1,45 @@
+name: Delete Environment
+
+on:
+  delete:
+    branches:
+      - '*'
+
+env:
+  PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+  GKE_CLUSTER: dwk-cluster
+  GKE_ZONE: me-west1-a
+
+jobs:
+  delete-environment:
+    name: Delete Environment
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GKE_SA_KEY }}'
+
+      - name: 'Set up Cloud SDK'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 'Get GKE credentials'
+        uses: 'google-github-actions/get-gke-credentials@v2'
+        with:
+          cluster_name: '${{ env.GKE_CLUSTER }}'
+          project_id: '${{ env.PROJECT_ID }}'
+          location: '${{ env.GKE_ZONE }}'
+
+      - name: Delete Namespace
+        if: github.ref != 'refs/heads/main'
+        run: |-
+          # Extract branch name from ref
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          
+          # Check if namespace exists and delete it if so
+          if kubectl get namespace "$BRANCH_NAME" >/dev/null 2>&1; then
+            kubectl delete namespace "$BRANCH_NAME"
+            echo "Deleted namespace for branch: $BRANCH_NAME"
+          else
+            echo "Namespace for branch $BRANCH_NAME does not exist or has already been deleted."
+          fi

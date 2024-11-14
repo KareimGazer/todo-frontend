@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend-container
+          image: PROJECT/FRONTEND_IMAGE
+          ports:
+            - containerPort: 5173
+          volumeMounts:
+            - name: shared-img
+              mountPath: /usr/src/app/dist/shared
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "264Mi"
+              cpu: "500m"
+        
+        - name: image-container
+          image: PROJECT/IMAGE_FINDER
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: shared-img
+              mountPath: /usr/src/app/shared
+          envFrom:
+            - configMapRef:
+                name: image-finder-config
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "264Mi"
+              cpu: "500m"
+      volumes:
+        - name: shared-img
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-svc
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 5173
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: image-finder-config
+data:
+  PORT: "3000"
+  API_URL: "https://picsum.photos"
+  IMG_WIDTH: "600"

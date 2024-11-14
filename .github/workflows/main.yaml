@@ -1,0 +1,75 @@
+name: Release application
+
+on:
+  push:
+
+env:
+  PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+  GKE_CLUSTER: dwk-cluster
+  GKE_ZONE: me-west1-a
+  IMAGE: todos-backend-pg
+  DEPLOYMENT: backend
+  BRANCH: ${{ github.ref_name }}
+
+jobs:
+  build-publish-deploy:
+    name: Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GKE_SA_KEY }}'
+
+      - name: 'Set up Cloud SDK'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 'Use gcloud CLI'
+        run: gcloud info
+
+      - run: gcloud --quiet auth configure-docker # enable us to push images to Google Artifact Registry
+      
+      - name: 'Get GKE credentials'
+        uses: 'google-github-actions/get-gke-credentials@v2'
+        with:
+          cluster_name: '${{ env.GKE_CLUSTER }}'
+          project_id: '${{ env.PROJECT_ID }}'
+          location: '${{ env.GKE_ZONE }}'
+
+      - name: Build
+        run: docker build --tag "gcr.io/$PROJECT_ID/$IMAGE:$BRANCH-$GITHUB_SHA" .
+
+      - name: Publish
+        run: docker push "gcr.io/$PROJECT_ID/$IMAGE:$BRANCH-$GITHUB_SHA"
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v2.1.0
+
+      - name: Deploy
+        run: |-
+          # Set namespace based on branch
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            NAMESPACE="default"
+          else
+            NAMESPACE="${{ github.ref_name }}"
+          fi
+
+          # Create namespace if it doesn't exist
+          kubectl create namespace $NAMESPACE || true
+          
+          # Set context to the specified namespace
+          kubectl config set-context --current --namespace=$NAMESPACE
+          kustomize edit set namespace $NAMESPACE
+          
+          # Set the image with the latest build
+          kustomize edit set image $PROJECT_ID/$IMAGE=gcr.io/$PROJECT_ID/$IMAGE:$BRANCH-$GITHUB_SHA
+          
+          # Deploy using Kustomize and wait for rollout to complete
+          kustomize build . | kubectl apply -f -
+          kubectl rollout status deployment $DEPLOYMENT
+          
+          # Show services and deployment status
+          kubectl get services -o wide
