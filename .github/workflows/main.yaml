@@ -7,8 +7,8 @@ env:
   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
   GKE_CLUSTER: dwk-cluster
   GKE_ZONE: me-west1-a
-  IMAGE: todos-backend-pg
-  DEPLOYMENT: backend
+  IMAGE: todos-frontend
+  DEPLOYMENT: frontend
   BRANCH: ${{ github.ref_name }}
 
 jobs:
